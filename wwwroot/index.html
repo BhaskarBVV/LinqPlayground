@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LINQ Playground</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --panel:#ffffff; --text:#1c2230; --muted:#6b7385; --border:#d8dce4;
+    --accent:#512bd4; --accent-text:#ffffff; --input:#fbfbfd; --err:#c0392b; --ok:#1e8e3e; --row:#f1f3f8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#14161c; --panel:#1c1f27; --text:#e6e8ee; --muted:#8d95a8; --border:#323744;
+      --accent:#8b6cf0; --accent-text:#101014; --input:#14161c; --err:#ff7b6b; --ok:#5fd07a; --row:#242833;
+    }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; }
+  body { background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--panel); }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header .sp { flex:1; }
+  button { font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:5px 10px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; padding:7px 16px; }
+  button.icon { padding:2px 7px; border-color:transparent; background:transparent; color:var(--muted); }
+  button.icon:hover { color:var(--err); }
+  main { flex:1; min-height:0; display:grid; grid-template-columns:minmax(320px, 42%) 1fr; gap:12px; padding:12px; }
+  @media (max-width: 900px) { main { grid-template-columns:1fr; overflow:auto; } }
+  .col { min-height:0; display:flex; flex-direction:column; gap:12px; }
+  #tables { overflow:auto; display:flex; flex-direction:column; gap:12px; padding-right:2px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px; }
+  .thead { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .tname { font-weight:600; width:140px; }
+  .hint { color:var(--muted); font:12px ui-monospace, Consolas, monospace; flex:1; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--input); border:1px solid var(--border); border-radius:5px; }
+  input, select { padding:3px 6px; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+  .gridwrap { overflow:auto; }
+  table.grid { border-collapse:separate; border-spacing:3px; }
+  table.grid th { text-align:left; font-weight:normal; white-space:nowrap; }
+  table.grid th input { width:92px; font-weight:600; }
+  table.grid th select { width:92px; margin-top:3px; display:block; font:12px ui-monospace, Consolas, monospace; }
+  table.grid td input { width:92px; }
+  .actions { display:flex; gap:6px; margin-top:8px; }
+  .editor { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px; }
+  .bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .bar select { max-width:280px; }
+  .bar .sp { flex:1; }
+  .muted { color:var(--muted); }
+  textarea#code { width:100%; height:230px; resize:vertical; padding:10px; font:13px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; tab-size:4; white-space:pre; }
+  .results { flex:1; min-height:140px; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px; }
+  .status { font-size:12px; color:var(--muted); margin-bottom:8px; }
+  table.res { border-collapse:collapse; font-size:13px; }
+  table.res th, table.res td { border:1px solid var(--border); padding:4px 10px; text-align:left; vertical-align:top; }
+  table.res th { background:var(--row); position:sticky; top:0; }
+  table.res td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .null { color:var(--muted); font-style:italic; }
+  pre.err { color:var(--err); white-space:pre-wrap; margin:0; font:13px ui-monospace, Consolas, monospace; }
+  pre.con { background:var(--row); padding:8px; border-radius:6px; margin:8px 0 0; white-space:pre-wrap; font:13px ui-monospace, Consolas, monospace; }
+  .scalar { font:600 22px ui-monospace, Consolas, monospace; }
+  .label { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-top:10px; }
+  code { background:var(--row); padding:1px 5px; border-radius:4px; }
+
+  .edwrap { position:relative; }
+  #ac { position:fixed; z-index:50; display:none; width:360px; background:var(--panel); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.25); overflow:hidden; font:13px ui-monospace, Consolas, monospace; }
+  #ac .list { max-height:220px; overflow:auto; }
+  #ac .acitem { display:flex; align-items:center; gap:8px; padding:3px 8px; cursor:pointer; }
+  #ac .acitem.sel { background:var(--accent); color:var(--accent-text); }
+  #ac .acitem:hover:not(.sel) { background:var(--row); }
+  #ac .k { width:18px; height:18px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font:600 11px system-ui, sans-serif; background:var(--row); color:var(--text); flex:none; }
+  #ac .k-Method, #ac .k-ExtensionMethod { background:#8e5bd8; color:#fff; }
+  #ac .k-Property { background:#2d8fcf; color:#fff; }
+  #ac .k-Field, #ac .k-Local, #ac .k-Parameter { background:#2a9d6f; color:#fff; }
+  #ac .k-Class, #ac .k-Struct, #ac .k-Interface, #ac .k-Enum { background:#d98a1f; color:#fff; }
+  #ac .k-Keyword { background:#8d95a8; color:#fff; }
+  #ac .detail { border-top:1px solid var(--border); padding:6px 8px; max-height:90px; overflow:auto; color:var(--muted); font-size:12px; white-space:pre-wrap; display:none; }
+  .mirror { position:absolute; visibility:hidden; left:-9999px; top:0; white-space:pre; overflow:hidden; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LINQ Playground</h1>
+  <span class="muted">Edit the tables, write a query, press <b>Ctrl/Cmd + Enter</b></span>
+  <span class="sp"></span>
+  <button id="reset">Reset sample data</button>
+</header>
+
+<main>
+  <section class="col">
+    <div id="tables"></div>
+    <div><button id="addTable">+ Add table</button></div>
+  </section>
+
+  <section class="col">
+    <div class="editor">
+      <div class="bar">
+        <select id="samples"><option value="">Load a sample query…</option></select>
+        <span class="sp"></span>
+        <span class="muted" id="vars"></span>
+        <button class="primary" id="run">▶ Run</button>
+      </div>
+      <div class="edwrap"><textarea id="code" spellcheck="false"></textarea></div>
+      <div class="muted">The last expression <b>without</b> a semicolon is shown as the result. Suggestions pop up as you type (<b>Ctrl+Space</b> forces them; ↑/↓, Enter or Tab to accept, Esc to close).</div>
+    </div>
+    <div class="results" id="results"><span class="muted">Results appear here.</span></div>
+  </section>
+</main>
+
+<div id="ac"><div class="list"></div><div class="detail"></div></div>
+
+<script>
+const TYPES = ['int','int?','long','long?','decimal','decimal?','double','double?','bool','bool?','string','DateTime','DateTime?'];
+const KEY = 'linqplayground.v1';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function cls(n) {                       // must match Playground.ClassName on the server
+  if (/ies$/i.test(n) && n.length > 3) return n.slice(0,-3) + 'y';
+  if (/[^s]s$/i.test(n)) return n.slice(0,-1);
+  return n + 'Item';
+}
+
+const SAMPLES = {
+  'Where + OrderBy': `Employees
+    .Where(e => e.Salary > 80000)
+    .OrderByDescending(e => e.Salary)`,
+  'Select (projection)': `Employees.Select(e => new { e.Name, AnnualBonus = e.Salary * 0.1m })`,
+  'GroupBy + aggregates': `Employees
+    .GroupBy(e => e.DepartmentId)
+    .Select(g => new {
+        DepartmentId = g.Key,
+        Count = g.Count(),
+        AvgSalary = g.Average(e => e.Salary)
+    })`,
+  'Join (inner)': `Employees.Join(Departments,
+    e => e.DepartmentId,
+    d => d.Id,
+    (e, d) => new { e.Name, Department = d.Name, e.Salary })`,
+  'GroupJoin (left join)': `Departments.GroupJoin(Employees,
+    d => d.Id,
+    e => e.DepartmentId,
+    (d, emps) => new {
+        Department = d.Name,
+        Headcount = emps.Count(),
+        Names = string.Join(", ", emps.Select(e => e.Name))
+    })`,
+  'Self join (query syntax)': `from e in Employees
+join m in Employees on e.ManagerId equals (int?)m.Id
+select new { Employee = e.Name, Manager = m.Name }`,
+  'Query syntax: join + group': `from e in Employees
+join d in Departments on e.DepartmentId equals d.Id
+group e by d.Name into g
+orderby g.Sum(x => x.Salary) descending
+select new { Department = g.Key, Total = g.Sum(x => x.Salary) }`,
+  'Aggregates in one object': `new {
+    Total = Employees.Sum(e => e.Salary),
+    Max = Employees.Max(e => e.Salary),
+    Count = Employees.Count(),
+    Oldest = Employees.OrderBy(e => e.HireDate).First().Name
+}`,
+  'Any / All': `new {
+    AnyOver100k = Employees.Any(e => e.Salary > 100000),
+    AllHiredBefore2025 = Employees.All(e => e.HireDate.Year < 2025)
+}`,
+  'Skip / Take (paging)': `Employees.OrderBy(e => e.Id).Skip(3).Take(3)`,
+  'Distinct': `Employees.Select(e => e.DepartmentId).Distinct()`,
+  'Deferred execution': `var query = Employees.Where(e => e.Salary > 100000);
+
+// Added AFTER the query was defined, yet it shows up in the result:
+Employees.Add(new Employee { Id = 99, Name = "Zed", DepartmentId = 1, Salary = 200000m, HireDate = DateTime.Today });
+
+query.Select(e => e.Name).ToList()`
+};
+
+function seed() {
+  const rows = (...r) => r.map(x => x.map(v => v === null ? '' : String(v)));
+  return {
+    tables: [
+      { name:'Departments',
+        columns:[{name:'Id',type:'int'},{name:'Name',type:'string'}],
+        rows: rows([1,'Engineering'],[2,'Sales'],[3,'HR'],[4,'Legal']) },
+      { name:'Employees',
+        columns:[{name:'Id',type:'int'},{name:'Name',type:'string'},{name:'DepartmentId',type:'int'},
+                 {name:'Salary',type:'decimal'},{name:'HireDate',type:'DateTime'},{name:'ManagerId',type:'int?'}],
+        rows: rows(
+          [1,'Asha',1,120000,'2019-03-15',null],
+          [2,'Ben',1,95000,'2020-07-01',1],
+          [3,'Chitra',1,105000,'2021-01-10',1],
+          [4,'Dev',2,70000,'2018-11-20',null],
+          [5,'Esha',2,65000,'2022-02-14',4],
+          [6,'Farid',2,72000,'2020-09-30',4],
+          [7,'Gita',3,58000,'2023-05-05',null],
+          [8,'Hari',3,61000,'2019-08-12',7],
+          [9,'Indu',1,88000,'2023-01-23',1],
+          [10,'Jay',2,54000,'2024-03-18',4]) }
+    ],
+    code: SAMPLES['Where + OrderBy']
+  };
+}
+
+let state;
+try { state = JSON.parse(localStorage.getItem(KEY)); } catch { state = null; }
+if (!state || !Array.isArray(state.tables)) state = seed();
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} updateVars(); }
+
+function updateVars() {
+  $('vars').textContent = state.tables.map(t => `${t.name}: List<${cls(t.name)}>`).join('  ·  ');
+}
+
+function renderTables() {
+  const box = $('tables');
+  box.innerHTML = state.tables.map((t, ti) => {
+    const head = t.columns.map((c, ci) => `
+      <th>
+        <input data-k="cname" data-t="${ti}" data-c="${ci}" value="${esc(c.name)}">
+        <select data-k="ctype" data-t="${ti}" data-c="${ci}">
+          ${TYPES.map(x => `<option${x === c.type ? ' selected' : ''}>${esc(x)}</option>`).join('')}
+        </select>
+        <button class="icon" data-act="delcol" data-t="${ti}" data-c="${ci}" title="Delete column">×</button>
+      </th>`).join('');
+    const body = t.rows.map((r, ri) => `<tr>${
+      t.columns.map((c, ci) => `<td><input data-k="cell" data-t="${ti}" data-r="${ri}" data-c="${ci}" value="${esc(r[ci] ?? '')}"></td>`).join('')
+    }<td><button class="icon" data-act="delrow" data-t="${ti}" data-r="${ri}" title="Delete row">×</button></td></tr>`).join('');
+    return `
+      <div class="card">
+        <div class="thead">
+          <input class="tname" data-k="tname" data-t="${ti}" value="${esc(t.name)}">
+          <span class="hint">List&lt;${esc(cls(t.name))}&gt;</span>
+          <button class="icon" data-act="deltable" data-t="${ti}" title="Delete table">🗑</button>
+        </div>
+        <div class="gridwrap"><table class="grid"><thead><tr>${head}<th></th></tr></thead><tbody>${body}</tbody></table></div>
+        <div class="actions">
+          <button data-act="addrow" data-t="${ti}">+ Row</button>
+          <button data-act="addcol" data-t="${ti}">+ Column</button>
+        </div>
+      </div>`;
+  }).join('');
+  updateVars();
+}
+
+$('tables').addEventListener('input', e => {
+  const el = e.target, k = el.dataset.k; if (!k) return;
+  const t = state.tables[+el.dataset.t];
+  if (k === 'tname') { t.name = el.value; el.parentElement.querySelector('.hint').innerHTML = `List&lt;${esc(cls(t.name))}&gt;`; }
+  else if (k === 'cname') t.columns[+el.dataset.c].name = el.value;
+  else if (k === 'cell') t.rows[+el.dataset.r][+el.dataset.c] = el.value;
+  save();
+});
+$('tables').addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset.k === 'ctype') { state.tables[+el.dataset.t].columns[+el.dataset.c].type = el.value; save(); }
+});
+$('tables').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const t = state.tables[+b.dataset.t], ti = +b.dataset.t;
+  switch (b.dataset.act) {
+    case 'addrow':   t.rows.push(t.columns.map(() => '')); break;
+    case 'delrow':   t.rows.splice(+b.dataset.r, 1); break;
+    case 'addcol':   t.columns.push({ name:'Column' + (t.columns.length + 1), type:'string' }); t.rows.forEach(r => r.push('')); break;
+    case 'delcol':   if (t.columns.length > 1) { t.columns.splice(+b.dataset.c, 1); t.rows.forEach(r => r.splice(+b.dataset.c, 1)); } break;
+    case 'deltable': state.tables.splice(ti, 1); break;
+  }
+  save(); renderTables();
+});
+$('addTable').onclick = () => {
+  state.tables.push({ name:'Table' + (state.tables.length + 1), columns:[{name:'Id',type:'int'},{name:'Name',type:'string'}], rows:[['','']] });
+  save(); renderTables();
+};
+$('reset').onclick = () => {
+  if (!confirm('Replace all tables and the query with the sample data?')) return;
+  state = seed(); save(); renderTables(); $('code').value = state.code;
+};
+
+// samples
+Object.keys(SAMPLES).forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = k; $('samples').appendChild(o); });
+$('samples').onchange = e => { if (e.target.value) { $('code').value = SAMPLES[e.target.value]; state.code = $('code').value; save(); e.target.value = ''; } };
+
+// editor
+const code = $('code');
+code.value = state.code || '';
+code.addEventListener('input', () => { state.code = code.value; save(); });
+code.addEventListener('keydown', e => {
+  if (e.key === 'Tab' && !(window.acIsOpen && window.acIsOpen())) {
+    e.preventDefault();
+    const s = code.selectionStart;
+    code.value = code.value.slice(0, s) + '    ' + code.value.slice(code.selectionEnd);
+    code.selectionStart = code.selectionEnd = s + 4;
+    state.code = code.value; save();
+  }
+});
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); } });
+$('run').onclick = run;
+
+// results
+function cellHtml(v) {
+  if (v === null || v === undefined) return '<td><span class="null">null</span></td>';
+  if (typeof v === 'object') return `<td>${esc(JSON.stringify(v))}</td>`;
+  return `<td${typeof v === 'number' ? ' class="num"' : ''}>${esc(v)}</td>`;
+}
+
+function renderResult(r) {
+  if (r === null || r === undefined)
+    return '<p class="muted">No value returned. End your query with an expression <b>without</b> a semicolon.</p>';
+  if (Array.isArray(r)) {
+    if (!r.length) return '<p class="muted">(empty sequence)</p>';
+    const objs = r.every(x => x && typeof x === 'object' && !Array.isArray(x));
+    let keys = ['Value'];
+    if (objs) { keys = []; r.forEach(x => Object.keys(x).forEach(k => { if (!keys.includes(k)) keys.push(k); })); }
+    const rows = r.map(x => `<tr>${(objs ? keys.map(k => cellHtml(x[k])) : [cellHtml(x)]).join('')}</tr>`).join('');
+    return `<table class="res"><thead><tr>${keys.map(k => `<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  if (typeof r === 'object') {
+    return `<table class="res"><tbody>${Object.entries(r).map(([k, v]) => `<tr><th>${esc(k)}</th>${cellHtml(v)}</tr>`).join('')}</tbody></table>`;
+  }
+  return `<div class="scalar">${esc(r)}</div>`;
+}
+
+async function run() {
+  const out = $('results'), btn = $('run');
+  btn.disabled = true; btn.textContent = 'Running…';
+  try {
+    const res = await fetch('/api/run', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tables: state.tables, code: code.value })
+    });
+    const d = await res.json();
+    let h = '';
+    if (d.ok) {
+      const n = Array.isArray(d.result) ? ` · ${d.result.length} item(s)` : '';
+      h += `<div class="status"><span style="color:var(--ok)">✔ OK</span> · ${d.elapsedMs} ms${n}</div>` + renderResult(d.result);
+    } else {
+      h += `<div class="status"><span style="color:var(--err)">✘ Error</span> · ${d.elapsedMs ?? 0} ms</div><pre class="err">${esc(d.error)}</pre>`;
+    }
+    if (d.console) h += `<div class="label">Console output</div><pre class="con">${esc(d.console)}</pre>`;
+    out.innerHTML = h;
+  } catch (err) {
+    out.innerHTML = `<pre class="err">${esc(err.message)}</pre>`;
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Run';
+  }
+}
+
+// ------------------------------------------------------------ IntelliSense
+(function () {
+  const pop = $('ac'), listEl = pop.querySelector('.list'), detEl = pop.querySelector('.detail');
+  const mirror = document.createElement('div'); mirror.className = 'mirror'; document.body.appendChild(mirror);
+  const LETTER = { Method:'M', ExtensionMethod:'M', Property:'P', Field:'F', Local:'L', Parameter:'L', Class:'C', Struct:'S',
+                   Interface:'I', Enum:'E', Keyword:'K', Namespace:'N', Constant:'F', EnumMember:'E', Delegate:'D' };
+  let items = [], shown = [], sel = 0, open = false, wordStart = 0, reqId = 0, timer = null, detTimer = null, detId = 0;
+  window.acIsOpen = () => open;
+
+  function caretXY() {
+    const cs = getComputedStyle(code);
+    ['fontFamily','fontSize','lineHeight','letterSpacing','tabSize','paddingTop','paddingLeft','paddingRight','paddingBottom']
+      .forEach(p => mirror.style[p] = cs[p]);
+    mirror.textContent = code.value.slice(0, code.selectionStart);
+    const span = document.createElement('span'); span.textContent = '\u200b'; mirror.appendChild(span);
+    const r = code.getBoundingClientRect(), lh = parseFloat(cs.lineHeight) || 19;
+    return { x: r.left + parseFloat(cs.borderLeftWidth) + span.offsetLeft - code.scrollLeft,
+             y: r.top + parseFloat(cs.borderTopWidth) + span.offsetTop - code.scrollTop + lh, lh };
+  }
+
+  function close() { open = false; pop.style.display = 'none'; reqId++; }
+
+  function place() {
+    const p = caretXY();
+    pop.style.display = 'block';
+    const h = pop.offsetHeight, w = pop.offsetWidth;
+    let x = Math.min(p.x, window.innerWidth - w - 8), y = p.y + 2;
+    if (y + h > window.innerHeight - 8) y = Math.max(8, p.y - p.lh - h - 2);
+    pop.style.left = Math.max(8, x) + 'px'; pop.style.top = y + 'px';
+  }
+
+  function render(word) {
+    const w = word.toLowerCase();
+    const starts = items.filter(i => i.filter.toLowerCase().startsWith(w));
+    const rest = w ? items.filter(i => !i.filter.toLowerCase().startsWith(w) && i.filter.toLowerCase().includes(w)) : [];
+    shown = starts.concat(rest).slice(0, 80);
+    if (!shown.length || (shown.length === 1 && shown[0].text === word)) { close(); return; }
+    sel = 0; open = true;
+    listEl.innerHTML = shown.map((it, n) =>
+      `<div class="acitem${n === 0 ? ' sel' : ''}" data-n="${n}"><span class="k k-${esc(it.kind)}">${LETTER[it.kind] || '·'}</span><span>${esc(it.text)}</span></div>`).join('');
+    place(); loadDetail();
+  }
+
+  function move(d) {
+    sel = (sel + d + shown.length) % shown.length;
+    listEl.querySelectorAll('.acitem').forEach((el, n) => el.classList.toggle('sel', n === sel));
+    const el = listEl.children[sel]; if (el) el.scrollIntoView({ block:'nearest' });
+    loadDetail();
+  }
+
+  function loadDetail() {
+    clearTimeout(detTimer); detEl.style.display = 'none';
+    const it = shown[sel]; if (!it) return;
+    const id = ++detId;
+    detTimer = setTimeout(async () => {
+      try {
+        const d = await (await fetch('/api/complete/detail?i=' + it.i)).json();
+        if (id !== detId || !open || !d.text) return;
+        detEl.textContent = d.text; detEl.style.display = 'block'; place();
+      } catch {}
+    }, 150);
+  }
+
+  function accept() {
+    const it = shown[sel]; if (!it) return close();
+    const pos = code.selectionStart;
+    code.value = code.value.slice(0, wordStart) + it.text + code.value.slice(pos);
+    code.selectionStart = code.selectionEnd = wordStart + it.text.length;
+    state.code = code.value; save(); close();
+  }
+
+  async function request(force) {
+    const pos = code.selectionStart, before = code.value.slice(0, pos);
+    const m = /[A-Za-z_][A-Za-z0-9_]*$/.exec(before), word = m ? m[0] : '';
+    const prev = before.slice(0, before.length - word.length).slice(-1);
+    if (!force && !word && prev !== '.') { close(); return; }
+    const id = ++reqId;
+    try {
+      const res = await fetch('/api/complete', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ tables: state.tables, code: code.value, position: pos }) });
+      const d = await res.json();
+      if (id !== reqId || code.selectionStart !== pos) return;   // stale response
+      items = d.items || []; wordStart = pos - word.length; render(word);
+    } catch { close(); }
+  }
+
+  code.addEventListener('input', e => {
+    if (e.inputType && e.inputType.startsWith('delete')) { close(); return; }
+    clearTimeout(timer); timer = setTimeout(() => request(false), 110);
+  });
+
+  code.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === ' ') { e.preventDefault(); request(true); return; }
+    if (!open || e.ctrlKey || e.metaKey || e.altKey) return;
+    switch (e.key) {
+      case 'ArrowDown': e.preventDefault(); move(1); break;
+      case 'ArrowUp':   e.preventDefault(); move(-1); break;
+      case 'Enter': case 'Tab': e.preventDefault(); accept(); break;
+      case 'Escape': e.preventDefault(); close(); break;
+      case 'ArrowLeft': case 'ArrowRight': case 'Home': case 'End': case 'PageUp': case 'PageDown': close(); break;
+    }
+  });
+
+  listEl.addEventListener('mousedown', e => {
+    const el = e.target.closest('.acitem'); if (!el) return;
+    e.preventDefault(); sel = +el.dataset.n; accept(); code.focus();
+  });
+  code.addEventListener('blur', () => setTimeout(close, 120));
+  code.addEventListener('click', close);
+  code.addEventListener('scroll', close);
+  window.addEventListener('resize', close);
+})();
+
+renderTables();
+</script>
+</body>
+</html>
